@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>群会话开启助手</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="head">
+        <h1>群会话开启助手</h1>
+        <p class="sub" id="summary">正在读取群列表…</p>
+      </header>
+
+      <div class="bar">
+        <button id="refresh" type="button">刷新</button>
+        <button id="select-missing" type="button">全选未开启</button>
+        <button id="select-open" type="button">全选已开启</button>
+        <button id="enable" type="button" class="primary" disabled>
+          为勾选的群开启会话
+        </button>
+        <button id="close" type="button" class="danger" disabled>
+          关闭勾选群的会话
+        </button>
+        <span class="msg" id="msg"></span>
+      </div>
+      <p class="hint">
+        「开启」只给没有会话的群新建空对话，不影响已有对话的内容。「关闭」会删掉
+        该群当前的对话（上下文清空），关掉后机器人也不会再在该群主动回复；
+        需要时随时可以再开启。
+      </p>
+
+      <ul class="list" id="list"></ul>
+      <p class="empty" id="empty" hidden>没有读到群聊（机器人可能尚未登录，或还没加入任何群）。</p>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
