@@ -5,11 +5,14 @@ const listEl = document.getElementById("list");
 const emptyEl = document.getElementById("empty");
 const msgEl = document.getElementById("msg");
 const enableBtn = document.getElementById("enable");
+const resetBtn = document.getElementById("reset");
 const closeBtn = document.getElementById("close");
 
 let groups = [];
 let closeArmed = false;
 let closeArmTimer = null;
+let resetArmed = false;
+let resetArmTimer = null;
 
 function applyTheme(ctx) {
   if (ctx && ctx.isDark) document.body.classList.add("dark");
@@ -42,6 +45,20 @@ function disarmClose() {
   closeBtn.classList.remove("armed");
 }
 
+function disarmReset() {
+  resetArmed = false;
+  if (resetArmTimer) {
+    clearTimeout(resetArmTimer);
+    resetArmTimer = null;
+  }
+  resetBtn.classList.remove("armed");
+}
+
+function disarmAll() {
+  disarmClose();
+  disarmReset();
+}
+
 function updateButtons() {
   const { missing, open } = checkedSplit();
   enableBtn.disabled = missing.length === 0;
@@ -49,6 +66,12 @@ function updateButtons() {
     missing.length === 0
       ? "为勾选的群开启会话"
       : `为勾选的 ${missing.length} 个群开启会话`;
+  resetBtn.disabled = open.length === 0;
+  resetBtn.textContent = resetArmed
+    ? `再点一次，确认重置这 ${open.length} 个群的会话`
+    : open.length === 0
+      ? "重置勾选群的会话"
+      : `重置勾选的 ${open.length} 个群会话`;
   closeBtn.disabled = open.length === 0;
   closeBtn.textContent = closeArmed
     ? `再点一次，确认关闭这 ${open.length} 个群的会话`
@@ -58,7 +81,7 @@ function updateButtons() {
 }
 
 function render() {
-  disarmClose();
+  disarmAll();
   listEl.replaceChildren();
   const missing = groups.filter((g) => !g.has_conversation).length;
   summaryEl.textContent = `共 ${groups.length} 个群 · 已开启会话 ${groups.length - missing} 个 · 未开启 ${missing} 个`;
@@ -75,7 +98,7 @@ function render() {
     cb.type = "checkbox";
     cb.value = g.id;
     cb.addEventListener("change", () => {
-      disarmClose();
+      disarmAll();
       updateButtons();
     });
     label.appendChild(cb);
@@ -122,7 +145,7 @@ function selectBy(pred) {
     const g = byId(el.value);
     el.checked = g ? pred(g) : el.checked;
   }
-  disarmClose();
+  disarmAll();
   updateButtons();
 }
 
@@ -158,6 +181,7 @@ closeBtn.addEventListener("click", async () => {
   const { open } = checkedSplit();
   if (!open.length) return;
   if (!closeArmed) {
+    disarmReset();
     closeArmed = true;
     closeBtn.classList.add("armed");
     updateButtons();
@@ -177,6 +201,39 @@ closeBtn.addEventListener("click", async () => {
     const failed = (res.failed || []).length;
     msgEl.textContent =
       `已关闭 ${closed} 个` +
+      (skipped ? `，跳过 ${skipped} 个` : "") +
+      (failed ? `，失败 ${failed} 个` : "");
+    await load();
+  } catch (e) {
+    msgEl.textContent = e.message || String(e);
+    updateButtons();
+  }
+});
+
+resetBtn.addEventListener("click", async () => {
+  const { open } = checkedSplit();
+  if (!open.length) return;
+  if (!resetArmed) {
+    disarmClose();
+    resetArmed = true;
+    resetBtn.classList.add("armed");
+    updateButtons();
+    resetArmTimer = setTimeout(() => {
+      disarmReset();
+      updateButtons();
+    }, 5000);
+    return;
+  }
+  disarmReset();
+  resetBtn.disabled = true;
+  msgEl.textContent = "正在重置…";
+  try {
+    const res = await bridge.apiPost("reset", { group_ids: open });
+    const created = (res.created || []).length;
+    const skipped = (res.skipped || []).length;
+    const failed = (res.failed || []).length;
+    msgEl.textContent =
+      `已重置 ${created} 个` +
       (skipped ? `，跳过 ${skipped} 个` : "") +
       (failed ? `，失败 ${failed} 个` : "");
     await load();
