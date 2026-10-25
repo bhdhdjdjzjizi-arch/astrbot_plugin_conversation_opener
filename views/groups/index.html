@@ -20,15 +20,19 @@
         <button id="enable" type="button" class="primary" disabled>
           为勾选的群开启会话
         </button>
+        <button id="reset" type="button" class="primary" disabled>
+          重置勾选群的会话
+        </button>
         <button id="close" type="button" class="danger" disabled>
           关闭勾选群的会话
         </button>
         <span class="msg" id="msg"></span>
       </div>
       <p class="hint">
-        「开启」只给没有会话的群新建空对话，不影响已有对话的内容。「关闭」会删掉
-        该群当前的对话（上下文清空），关掉后机器人也不会再在该群主动回复；
-        需要时随时可以再开启。
+        「开启」只给没有会话的群新建空对话，不影响已有对话的内容。「重置」给勾选的
+        已开启群直接开一个新会话——旧对话记录保留在库里，只把当前会话切到新的，等同
+        于在群里发 /new，但群里不会有任何提示消息。「关闭」会删掉该群当前的对话（上
+        下文清空），关掉后机器人也不会再在该群主动回复；需要时随时可以再开启。
       </p>
 
       <ul class="list" id="list"></ul>

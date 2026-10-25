@@ -17,6 +17,7 @@ ConversationManager.new_conversation（与内置 /new 指令同一入口，不�
 from astrbot.api import logger
 from astrbot.api.star import Context, Star
 from astrbot.api.web import error_response, json_response, request
+from astrbot.core.utils.active_event_registry import active_event_registry
 
 PLUGIN_NAME = "astrbot_plugin_conversation_opener"
 
@@ -41,6 +42,12 @@ class ConversationOpenerPlugin(Star):
             self.api_disable_groups,
             ["POST"],
             "关闭勾选群的会话（删除其当前对话）",
+        )
+        context.register_web_api(
+            f"/{PLUGIN_NAME}/reset",
+            self.api_reset_groups,
+            ["POST"],
+            "为勾选的群开新会话（保留旧对话记录，等价于群里发 /new）",
         )
 
     # ------------------------------------------------------------------
@@ -169,4 +176,53 @@ class ConversationOpenerPlugin(Star):
         )
         return json_response(
             {"closed": closed, "skipped": skipped, "failed": failed}
+        )
+
+    async def _current_persona_id(self, umo: str) -> str | None:
+        """取当前对话的 persona_id，供新会话继承（与内置 /new 一致）。"""
+        conv_mgr = self.context.conversation_manager
+        cid = await conv_mgr.get_curr_conversation_id(umo)
+        if not cid:
+            return None
+        conv = await conv_mgr.get_conversation(umo, cid)
+        return getattr(conv, "persona_id", None) if conv else None
+
+    async def api_reset_groups(self):
+        """为勾选的群开新会话：中断进行中的回复，旧对话记录保留在库里。
+
+        与「开启」的区别：不判断是否已有会话，无条件新建。
+        """
+        payload = await request.json(default={})
+        group_ids = payload.get("group_ids") or []
+        if not isinstance(group_ids, list) or not group_ids:
+            return error_response("没有勾选任何群", status_code=400)
+        platform_id, bot = self._find_qq_platform()
+        if bot is None:
+            return error_response("QQ 平台未连接", status_code=503)
+        conv_mgr = self.context.conversation_manager
+        created, skipped, failed = [], [], []
+        for raw_gid in group_ids:
+            gid = str(raw_gid).strip()
+            if not gid:
+                continue
+            umo = f"{platform_id}:GroupMessage:{gid}"
+            try:
+                if await conv_mgr.get_curr_conversation_id(umo) is None:
+                    skipped.append(gid)
+                    continue
+                persona_id = await self._current_persona_id(umo)
+                active_event_registry.stop_all(umo)
+                await conv_mgr.new_conversation(
+                    umo, platform_id, persona_id=persona_id
+                )
+                created.append(gid)
+            except Exception as e:
+                logger.warning(f"[conversation_opener] 为群 {gid} 重置会话失败: {e}")
+                failed.append(gid)
+        logger.info(
+            f"[conversation_opener] 已为 {len(created)} 个群重置会话，"
+            f"跳过 {len(skipped)} 个，失败 {len(failed)} 个"
+        )
+        return json_response(
+            {"created": created, "skipped": skipped, "failed": failed}
         )
